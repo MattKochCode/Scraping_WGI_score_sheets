@@ -1,4 +1,28 @@
+```{python}
+import pandas as pd
+import requests
+```
 
 ```{python}
+url = "https://wgiserver.org/v1/seasonapi%3Dpvk7syNgSZbCyTtTf_tWAw" #json link from the WGI historical scores for 2025 percussion
+params = {
+    "Division": "perc",
+    "SeasonId": "a0sUy0000007hTFIAY"  # 2025 Season ID
+}
 
+r = requests.get(url, params=params)
+data = r.json()
+
+jsondf = pd.DataFrame(data)
+
+jsondf = jsondf[~jsondf.Name.str.contains("Concert|PSC", case=False, na=False)]
+
+
+recap_urls = (
+    jsondf["RecapURL"]         # remove missing links
+    .unique()          # deduplicate
+    .tolist()          # convert to Python list
+)
+date_lookup = jsondf.set_index("RecapURL")["Show_Date__c"].to_dict()
+len(recap_urls)
 ```

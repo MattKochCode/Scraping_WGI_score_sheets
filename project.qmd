@@ -1,260 +1,225 @@
-```{python}
-get_req = requests.get("https://recaps.competitionsuite.com/d821a435-4d55-4166-a41a-64b72a951aa6.htm")
-comp_soup = BeautifulSoup(get_req.content)
-
-comp_text = get_req.text
-
-test = re.sub(r"(?<=content rank\'>)(\d+)", r'(\1)', comp_text)
-
-tables = pd.read_html(StringIO(test), match="Effect")
-len(tables)
-tables[0]
-tables[1]
-tables[2]
-tables[3]
-```
 
 ```{python}
-# ===============================================================
-# 1. Imports
-# ===============================================================
 import pandas as pd
 import requests
-from io import StringIO
-from bs4 import BeautifulSoup
 import re
-
+from io import StringIO
 ```
 
 ```{python}
-# ===============================================================
-# 2. MASTER COLUMN SCHEMA (now includes judge columns)
-# ===============================================================
+url = "https://wgiserver.org/v1/seasonapi%3Dpvk7syNgSZbCyTtTf_tWAw" #json link from the WGI historical scores for 2025 percussion
+params = {
+    "Division": "perc",
+    "SeasonId": "a0sUy0000007hTFIAY"  # 2025 Season ID
+}
+
+r = requests.get(url, params=params)
+data = r.json()
+
+jsondf = pd.DataFrame(data)
+
+jsondf = jsondf[~jsondf.Name.str.contains("Concert|PSC", case=False, na=False)]
+
+
+recap_urls = (
+    jsondf["RecapURL"]         # remove missing links
+    .unique()          # deduplicate
+    .tolist()          # convert to Python list
+)
+date_lookup = jsondf.set_index("RecapURL")["Show_Date__c"].to_dict()
+len(recap_urls)
+```
+
+```{python}
+#set up for loop cell
+cleaned_tables = []
+
+# Set the columns
+
 master_col = [
+    "group","location",
 
-    "group", "location",
-
-    # Effect Music judges + scores
-    "effect_music_1_judge",
-    "effect_music_1_ovr","effect_music_1_mus","effect_music_1_tot",
-    "effect_music_2_judge",
-    "effect_music_2_ovr","effect_music_2_mus","effect_music_2_tot",
-    "effect_music_total",
-
-    # Effect Visual judges + scores
-    "effect_visual_1_judge",
-    "effect_visual_1_ovr","effect_visual_1_vis","effect_visual_1_tot",
-    "effect_visual_2_judge",
-    "effect_visual_2_ovr","effect_visual_2_vis","effect_visual_2_tot",
-    "effect_visual_total",
-
-    # Music judges + scores
-    "music_1_judge",
-    "music_1_comp","music_1_perf","music_1_tot",
-    "music_2_judge",
-    "music_2_comp","music_2_perf","music_2_tot",
-    "music_total",
-
-    # Visual judges + scores
-    "visual_1_judge",
-    "visual_1_comp","visual_1_perf","visual_1_tot",
-    "visual_2_judge",
-    "visual_2_comp","visual_2_perf","visual_2_tot",
-    "visual_total",
-
-    # Summary columns
-    "sub_total","penalties","total"
-]
-```
-
-```{python}
-# ===============================================================
-# 3. PROCESS LARGE TABLE (TWO-JUDGE PANELS)
-# ===============================================================
-
-# ---- 3A. Request & clean HTML ----
-url_large = "https://recaps.competitionsuite.com/d821a435-4d55-4166-a41a-64b72a951aa6.htm"
-req_large = requests.get(url_large)
-
-html_large = req_large.text
-html_large = re.sub(r"(?<=content rank\'>)(\d+)", r'(\1)', html_large)
-
-tables_large = pd.read_html(StringIO(html_large), match="Effect")
-
-# ---- 3B. Extract big scoring table ----
-big_raw = tables_large[1]
-
-# Header rows for judge extraction
-header0 = big_raw.iloc[0]
-header1 = big_raw.iloc[1]   # JUDGE NAMES
-header2 = big_raw.iloc[2]
-
-# ---- 3C. Remove header rows & assign score columns ----
-big_df = big_raw.iloc[3:].reset_index(drop=True)
-
-big_df.columns = [
-    "group", "location",
-
-    # Effect Music (judge 1 + judge 2)
+    # Effect Music (1 & 2)
     "effect_music_1_ovr","effect_music_1_mus","effect_music_1_tot",
     "effect_music_2_ovr","effect_music_2_mus","effect_music_2_tot",
     "effect_music_total",
 
-    # Effect Visual (judge 1 + judge 2)
+    # Effect Visual (1 & 2)
     "effect_visual_1_ovr","effect_visual_1_vis","effect_visual_1_tot",
     "effect_visual_2_ovr","effect_visual_2_vis","effect_visual_2_tot",
     "effect_visual_total",
 
-    # Music
+    # Music (1 & 2)
     "music_1_comp","music_1_perf","music_1_tot",
     "music_2_comp","music_2_perf","music_2_tot",
     "music_total",
 
-    # Visual
+    # Visual (1 & 2)
     "visual_1_comp","visual_1_perf","visual_1_tot",
     "visual_2_comp","visual_2_perf","visual_2_tot",
     "visual_total",
 
     # Summary
-    "sub_total","penalties","total"
+    "sub_total","penalties","total",
+
+    # Judge name columns
+    "effect_music_1_judge","effect_music_2_judge",
+    "effect_visual_1_judge","effect_visual_2_judge",
+    "music_1_judge","music_2_judge",
+    "visual_1_judge","visual_2_judge",
+
+    # Metadata
+    "class"
 ]
-
-# ---- 3D. Insert judge-name columns ----
-big_df["effect_music_1_judge"]  = header1[2]
-big_df["effect_music_2_judge"]  = header1[5]
-big_df["effect_visual_1_judge"] = header1[9]
-big_df["effect_visual_2_judge"] = header1[12]
-big_df["music_1_judge"]         = header1[16]
-big_df["music_2_judge"]         = header1[19]
-big_df["visual_1_judge"]        = header1[23]
-big_df["visual_2_judge"]        = header1[26]
-
-# ---- 3E. Reorder columns to match master schema ----
-big_df = big_df.reindex(columns=master_col)
 ```
 
 ```{python}
-# ===============================================================
-# 4. PROCESS SMALL TABLE (ONE-JUDGE PANELS)
-# ===============================================================
+# beginng of the loop 
 
-url_small = "https://recaps.competitionsuite.com/11afd1c8-276a-4052-bc54-4bd0cbd539ba.htm"
-req_small = requests.get(url_small)
+for url in recap_urls:
+    print(f"loading... {url}")
 
-html_small = req_small.text
-html_small = re.sub(r"(?<=content rank\'>)(\d+)", r'(\1)', html_small)
+    # preset the rank in to parentheses for later deperation
+    html = requests.get(url).text
+    html = re.sub(r"(?<=content rank\'>)(\d+)", r'(\1)', html)
 
-tables_small = pd.read_html(StringIO(html_small), match="Effect")
+    tables = pd.read_html(StringIO(html), match="Visual") #helped limit the searches for marching only (ended up needing more because winds slipped in)
 
-small_raw = tables_small[13]
+    # limit tables to only be marching percussion
+    for idx in range(1, len(tables), 2):
 
-# Extract header rows (judge names)
-small_header1 = small_raw.iloc[1]
+        raw = tables[idx]             # scoring table
+        class_table = tables[idx - 1] # class table immediately before used for helping determine the class of the group 
 
-# ---- 4B. Drop header rows ----
-small_df = small_raw.iloc[3:].reset_index(drop=True)
+        # Correct class extraction (class is basically the skill group with world class being the highest level of skill)
+        event_class = class_table.iloc[0,0]
+        print(f"Class: {event_class}")
 
-# ---- 4C. Assign score columns for one-judge tables ----
-small_df.columns = [
-    "group", "location",
+        # Determine table type
+        is_large = raw.shape[1] > 20
 
-    "effect_music_1_ovr","effect_music_1_mus","effect_music_1_tot",
-    "effect_visual_1_ovr","effect_visual_1_vis","effect_visual_1_tot",
-    "music_1_comp","music_1_perf","music_1_tot",
-    "visual_1_comp","visual_1_perf","visual_1_tot",
-    "sub_total","penalties","total"
-]
+        expected_small = 17
+        expected_large = 33 #these are the two standard sizings for either single or double pannel judging
 
-# ---- 4D. Add judge columns (judge 2 = None for single-panel shows) ----
-small_df["effect_music_1_judge"]  = small_header1[2]
-small_df["effect_visual_1_judge"] = small_header1[5]
-small_df["music_1_judge"]         = small_header1[8]
-small_df["visual_1_judge"]        = small_header1[11]
+        if raw.shape[1] not in (expected_small, expected_large):
+            print(f"Skipping table — unexpected column count: {raw.shape[1]}")
+            continue #skips this raw table if it does not meet the standard table sizings removing things like winds.
 
-small_df["effect_music_2_judge"]  = None
-small_df["effect_visual_2_judge"] = None
-small_df["music_2_judge"]         = None
-small_df["visual_2_judge"]        = None
+        # Extracts header row (judge names)
+        header1 = raw.iloc[1]
 
-# ---- 4E. Expand into full schema ----
-small_df_full = small_df.reindex(columns=master_col)
-```
+        # Remove header rows
+        df = raw.iloc[3:].reset_index(drop=True)
 
+        # large panel (two judges per category)
 
-```{python}
-# ===============================================================
-# step 5 combine the small df 
-# ===============================================================
+        if is_large:
+            print("It's a large table") #just used for seeign progress and identifying problem tables
 
-combined_df = pd.concat([big_df, small_df_full], ignore_index=True)
+            df.columns = [
+                "group","location",
 
-```
+                # Effect Music
+                "effect_music_1_ovr","effect_music_1_mus","effect_music_1_tot",
+                "effect_music_2_ovr","effect_music_2_mus","effect_music_2_tot",
+                "effect_music_total",
 
+                # Effect Visual
+                "effect_visual_1_ovr","effect_visual_1_vis","effect_visual_1_tot",
+                "effect_visual_2_ovr","effect_visual_2_vis","effect_visual_2_tot",
+                "effect_visual_total",
 
-```{python}
-# ===============================================================
-# 6. SPLIT SCORES & RANKS (inline, no functions)
-# ===============================================================
-```
+                # Music
+                "music_1_comp","music_1_perf","music_1_tot",
+                "music_2_comp","music_2_perf","music_2_tot",
+                "music_total",
 
+                # Visual
+                "visual_1_comp","visual_1_perf","visual_1_tot",
+                "visual_2_comp","visual_2_perf","visual_2_tot",
+                "visual_total",
 
+                # Summary
+                "sub_total","penalties","total"
+            ]
 
+            # judge name columns
+            df["effect_music_1_judge"]  = header1[2]
+            df["effect_music_2_judge"]  = header1[5]
+            df["effect_visual_1_judge"] = header1[9]
+            df["effect_visual_2_judge"] = header1[12]
+            df["music_1_judge"]         = header1[16]
+            df["music_2_judge"]         = header1[19]
+            df["visual_1_judge"]        = header1[23]
+            df["visual_2_judge"]        = header1[26]
 
-```{python}
-# ===============================================================
-# 5. SPLIT SCORES & RANKS (inline, no functions)
-# ===============================================================
+        # Small panel (one judge per category)
+        else:
+            print("It's a small table")
 
-# 5. build the skip columns 
+            df.columns = [
+                "group","location",
+
+                "effect_music_1_ovr","effect_music_1_mus","effect_music_1_tot",
+                "effect_visual_1_ovr","effect_visual_1_vis","effect_visual_1_tot",
+                "music_1_comp","music_1_perf","music_1_tot",
+                "visual_1_comp","visual_1_perf","visual_1_tot",
+                "sub_total","penalties","total"
+            ]
+            # judge name columns
+            df["effect_music_1_judge"]  = header1[2]
+            df["effect_visual_1_judge"] = header1[5]
+            df["music_1_judge"]         = header1[8]
+            df["visual_1_judge"]        = header1[11]
+            df["effect_music_2_judge"]  = None #none since there are no 2nd panel judges
+            df["effect_visual_2_judge"] = None
+            df["music_2_judge"]         = None
+            df["visual_2_judge"]        = None
+        
+        # add in the class and date columns
+
+        df["class"] = event_class
+
+        df["date"] = date_lookup.get(url, None)
+
+        #adding date
+        df = df.reindex(columns = master_col + ["date"])
+
+        cleaned_tables.append(df)
+
+scores_and_rank_df = pd.concat(cleaned_tables, ignore_index=True)
+
+scores_and_rank_df
+
+scores_and_rank_df["date"] = pd.to_datetime(scores_and_rank_df["date"], errors="coerce").dt.date
+
+# splitting the scores and ranks
 skip_cols = [
     "group","location",
     "effect_music_1_judge","effect_music_2_judge",
     "effect_visual_1_judge","effect_visual_2_judge",
     "music_1_judge","music_2_judge",
-    "visual_1_judge","visual_2_judge"
+    "visual_1_judge","visual_2_judge",
+    "class", "date"
 ]
+combined_scores = scores_and_rank_df.copy()
+combined_ranks  = scores_and_rank_df.copy()
 
-# ---- 5A. Big table ----
-big_scores = big_df.copy()
-big_ranks  = big_df.copy()
+for col in scores_and_rank_df.columns:
+    if col not in skip_cols:
+        if scores_and_rank_df[col].dtype == object:
 
-for col in big_df.columns:
-
-    if col not in skip_cols:             # only scoring columns
-        if big_df[col].dtype == object:  # ensure string-like
-            # SCORE
-            big_scores[col] = (
-                big_df[col]
+            combined_scores[col] = (
+                scores_and_rank_df[col]
                 .str.extract(r'^([\d.]+)', expand=False)
                 .astype(float)
             )
-            # RANK
-            big_ranks[col] = (
-                big_df[col]
+
+            combined_ranks[col] = (
+                scores_and_rank_df[col]
                 .str.extract(r'\((\d+)\)', expand=False)
                 .astype(float)
             )
-
-
-# ---- 5B. Small table ----
-small_scores = small_df_full.copy()
-small_ranks  = small_df_full.copy()
-
-for col in small_df_full.columns:
-
-    if col not in skip_cols:                        # skip judge + metadata
-        if small_df_full[col].dtype == object:      # scoring columns only
-            # SCORE
-            small_scores[col] = (
-                small_df_full[col]
-                .str.extract(r'^([\d.]+)', expand=False)
-                .astype(float)
-            )
-            # RANK
-            small_ranks[col] = (
-                small_df_full[col]
-                .str.extract(r'\((\d+)\)', expand=False)
-                .astype(float)
-            )
-
+combined_scores
+combined_ranks
 ```
