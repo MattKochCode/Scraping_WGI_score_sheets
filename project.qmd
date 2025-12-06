@@ -223,3 +223,12 @@ for col in scores_and_rank_df.columns:
 combined_scores
 combined_ranks
 ```
+
+
+```{python}
+# Save full score dataset
+combined_scores.to_csv("WGI_2025_scores.csv", index=False)
+
+# Save full rank dataset
+combined_ranks.to_csv("WGI_2025_ranks.csv", index=False)
+```
